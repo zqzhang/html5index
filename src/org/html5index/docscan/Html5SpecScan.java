@@ -1,8 +1,8 @@
 package org.html5index.docscan;
 
 import java.util.ArrayList;
-import java.util.List;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 
 import org.html5index.idl.IdlParser;
@@ -12,7 +12,6 @@ import org.html5index.model.Type;
 import org.html5index.util.HtmlWriter;
 import org.w3c.dom.Document;
 import org.w3c.dom.Element;
-import org.w3c.dom.Node;
 import org.w3c.dom.NodeList;
 
 
@@ -74,7 +73,7 @@ public class Html5SpecScan extends AbstractSpecScan {
     String name = type.getName();
     if (name.toLowerCase().indexOf("canvas") != -1) {
       // doofl;
-      System.out.println("ddd");
+      //System.out.println("ddd");
     }
     String id = typeToId(name);
     for (String prefix: TYPE_ID_PREFIX) {
@@ -187,7 +186,7 @@ public class Html5SpecScan extends AbstractSpecScan {
     for (int i = 0; i < list.getLength(); i++) {
       Element element = (Element) list.item(i);
       String id = element.getAttribute("id");
-      if (id != null) {
+      if (id != null && !"".equals(id)) {
         while (element.getNodeName().equals("dfn") || element.getNodeName().equals("code")) {
           element = (Element) element.getParentNode();
         }
@@ -239,10 +238,12 @@ public class Html5SpecScan extends AbstractSpecScan {
       // Hack... :-/
       currentIdlLinks = links;
       currentIdlLinkIndex = 0;
+      //System.out.println(idl);
       new IdlParser(lib, idl).parse();
     } catch(Exception e) {
       System.out.println(idl);
-      throw new RuntimeException(e);
+      e.printStackTrace();
+      //throw new RuntimeException(e);
     }
   }
 
@@ -252,32 +253,121 @@ public class Html5SpecScan extends AbstractSpecScan {
     lib.setDocumentationProvider(this);
     
     for (Document doc: docs) {
-      // Read idl
+      NodeList titles = doc.getElementsByTagName("title");
+      Element _title = (Element) titles.item(0);
+      /*if ("Web Workers".equals(_title.getTextContent())){
+    	  NodeList nodes = doc.getElementsByTagName("script");
+          for (int i = 0; i < nodes.getLength(); i++){
+        	  Node node = nodes.item(i);
+        	  node.getParentNode().removeChild(node);
+          }
+      }*/
+      // Read idl from pre
       NodeList list = doc.getElementsByTagName("pre");
       for (int i = 0; i < list.getLength(); i++) {
         Element pre = (Element) list.item(i);
+        //System.out.println("===>" + pre.getNodeName());
         String tc = pre.getTextContent().trim();
         if (pre.getAttribute("class").equals("idl") || 
-            tc.startsWith("interface ") || tc.startsWith("partial interface")) {
+        	pre.getAttribute("class").equals("widl") || 
+        	("The picture element".equals(_title.getTextContent()) && pre.getParentNode().getNodeName().equals("dd")) ||
+            tc.startsWith("interface ") || 
+            tc.startsWith("partial interface")) {
 
+          if ("The picture element".equals(_title.getTextContent())){
+        	  StringBuilder sb = new StringBuilder(tc);
+        	  int p = sb.indexOf("HTMLPictureElement");
+        	  sb.insert(p, "interface ");
+        	  tc = sb.toString();
+          }
+          tc = tc.replace("<any>", "");
+          tc = tc.replace("[EnsureUTF16]", "");
+          tc = tc.replace("serializer = {attribute};", "");
           tc = tc.replace("createFor()Blob", "createFor(Blob");
           tc = tc.replace("attribute DOMString _camel-cased attribute", "attribute DOMString _camel_cased_attribute");
           addIdl(lib, tc, pre.getElementsByTagName("a"));
         }
       }
-    
+      
       // The file spec uses this idl code annotation
       list = doc.getElementsByTagName("code");
       for (int i = 0; i < list.getLength(); i++) {
         Element code = (Element) list.item(i);
         if (code.getAttribute("class").equals("idl-code")) {
           String tc = code.getTextContent();
+          // for webaudio spec
+          if (tc.contains("var") || tc.contains("function") || tc.contains("if") || tc.contains("context"))
+      		continue;
           // Fix known issues
-          tc = tc.replace("static DOMString? createFor()Blob blob);", 
-              "static DOMString? createFor(Blob blob);");
+          tc = tc.replace("static DOMString? createFor()Blob blob);", "static DOMString? createFor(Blob blob);");
+          tc = tc.replace("[Clamp]", "");
+          tc = tc.replace("[EnforceRange]", "");
           addIdl(lib, tc, code.getElementsByTagName("a"));
         }
       }
+      // Read idl from dl
+      list = doc.getElementsByTagName("dl");
+      for (int i = 0; i < list.getLength(); i++) {
+        Element dl = (Element) list.item(i);
+        if (dl.getAttribute("class").equals("idl")) {
+        	String title = dl.getAttribute("title");
+        	if (title.contains("callback"))
+        		continue;
+        	if (title.contains("[MapClass(DOMString, MIDIPort)]"))
+        		title = title.replace("[MapClass(DOMString, MIDIPort)]", "");
+        	NodeList subList = dl.getChildNodes();
+        	String dtStr = "";
+        	for (int j = 0; j < subList.getLength(); j++){
+        		Element dt = (Element) subList.item(j);
+        		if (!dt.getNodeName().toLowerCase().equals("dt"))
+        			continue;
+        		
+            	Element dd = (Element) dt.getNextSibling();
+            	String property = dt.getTextContent().trim();
+            	String parameter = "";
+            	if (dd != null && dd.getNodeName().toLowerCase().equals("dd") 
+            			&& dd.getElementsByTagName("dl").getLength() > 0){
+            		Element _dl = (Element) dd.getElementsByTagName("dl").item(0);
+            		if (_dl != null && _dl.getAttribute("class").equals("parameters")){
+            			NodeList params = _dl.getElementsByTagName("dt");
+            			for (int k = 0; k < params.getLength(); k++){
+            				Element param = (Element) params.item(k);
+            				parameter += param.getTextContent().trim() + ",";
+            			}
+            			// remove ','
+            			parameter = parameter.substring(0, parameter.length()-1);
+            		}
+            	}
+            	// update method
+            	if (parameter.length() > 0 && property.endsWith("()")){
+            		property = property.substring(0, property.length()-2) + " ( " + parameter + " ) ";
+            	}
+            	//System.out.println("==============>"+property);
+            	if (property.length() > 0){
+            		if (title.contains("enum")){
+            			property = property.replaceAll("\"", "");
+            			dtStr += property + ",\n";
+            		}else
+            			dtStr += property + ";\n";
+            	}
+        	}
+        	String tc = "";
+        	if (!"".equals(dtStr))
+        		tc = title + " {\n" + dtStr + "}";
+        	else
+        		tc = title + ";";
+
+        	// remove additional info for <dl> title
+          tc = tc.replace("Interface", "");
+          tc = tc.replace("DisplayEvent", "");
+          tc = tc.replace("&lt;", "<");
+          tc = tc.replace("createFor()Blob", "createFor(Blob");
+          tc = tc.replace("attribute DOMString _camel-cased attribute", "attribute DOMString _camel_cased_attribute");
+          addIdl(lib, tc, dl.getElementsByTagName("a"));
+        }
+      }
+    
+      
     }
   }
 }

@@ -13,6 +13,8 @@ import java.io.StringReader;
 import java.io.Writer;
 import java.net.URL;
 import java.net.URLConnection;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
 import javax.xml.transform.Transformer;
 import javax.xml.transform.TransformerFactory;
@@ -45,12 +47,13 @@ public class DomLoader {
         part = part.trim();
         if (part.startsWith("charset=")) {
           charSet = part.substring(8);
+          charSet = charSet.replaceAll("\"", "");
           break;
         }
       }
     }
     BufferedReader reader = new BufferedReader(new InputStreamReader(con.getInputStream(), charSet));
-    String text = loadText(reader);
+    String text = removeScriptTag(loadText(reader));
     reader.close();
     
     Writer writer = new OutputStreamWriter(new FileOutputStream(cacheFile), "utf-8");
@@ -60,6 +63,23 @@ public class DomLoader {
     return new BufferedReader(new StringReader(text));
   }
 
+  static String removeScriptTag(String data){
+	  StringBuilder regex = new StringBuilder("<script[^>]*>(.*?)</script>");
+	  int flags = Pattern.MULTILINE | Pattern.DOTALL| Pattern.CASE_INSENSITIVE;
+	  Pattern pattern = Pattern.compile(regex.toString(), flags);
+	  Matcher matcher = pattern.matcher(data);
+	  return matcher.replaceAll("");
+  }
+  
+  static void createDirDefault(){
+	  File dir = new File("cache");
+	  if (!dir.exists())
+		  dir.mkdirs();
+	  dir = new File("gen");
+	  if (!dir.exists())
+		  dir.mkdirs();
+  }
+  
   static String loadText(String url) throws IOException {
     BufferedReader reader = openReader(url);
     String result = loadText(reader);
@@ -85,6 +105,7 @@ public class DomLoader {
   }
   
   public static Document loadDom(String url) {
+	createDirDefault();
     Parser parser = new Parser();
 
     try {

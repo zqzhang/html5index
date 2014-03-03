@@ -15,8 +15,11 @@ public class Tokenizer {
   public static final int TT_SCOPE = -10;
   public static final int TT_COMMENT = -11;
   public static final int TT_LINE_COMMENT = -12;
+  // ...
   public static final int TT_ELLIPSIS = 13;
   public static final int TT_WHITESPACE = 32;
+  // ,
+  public static final int TT_COMMA = 44;
 
   int last;
   int pos;

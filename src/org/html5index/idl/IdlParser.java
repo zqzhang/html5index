@@ -87,6 +87,9 @@ public class IdlParser {
         consumeIdentifier();
         modifiers |= Artifact.STATIC;
       }
+      if ("enum".equals(tokenizer.sval)) {
+    	  parseEnum();
+      }
       if ("stringifier".equals(tokenizer.sval)) {
         consumeIdentifier();
         if (tokenizer.ttype == ';') {
@@ -146,7 +149,9 @@ public class IdlParser {
     
     String name = tokenizer.sval;
     consume(Tokenizer.TT_WORD);
-    consume(';');
+    if (tokenizer.ttype == ';') {
+    	consume(';');
+    }
     return new Property(modifiers, propertyType, name, null);
   }
  
@@ -219,9 +224,18 @@ public class IdlParser {
       if (tokenizer.sval.equals("unrestricted")) {
         consumeIdentifier();
         name = "unrestricted " + consumeIdentifier();
-      } else if (tokenizer.sval.equals("unsigned")) {
-        consumeIdentifier();
-        name = "unsigned " + consumeIdentifier();
+      } else if (tokenizer.sval.equals("unsigned") || 
+    		  tokenizer.sval.equals("unsigend")) {
+    	  consumeIdentifier();
+    	if (tokenizer.ttype == '?'){
+	        consume('?');
+	        name = "unsigned ?";
+        }else{
+	        name = "unsigned " + consumeIdentifier();
+        }
+      } else if (tokenizer.sval.equals("optional")) {
+    	  consumeIdentifier();
+          name = "optional " + consumeIdentifier();
       } else {
         name = consumeIdentifier();
       }
@@ -237,11 +251,20 @@ public class IdlParser {
     }
     
     Type type;
-    if (name.equals("sequence")) {
-      consume('<');
+    if (name.equals("sequence") && tokenizer.ttype == '<') {
+    	if (tokenizer.ttype == '<')
+    		consume('<');
       Type baseType = parseType();
-      consume('>');
+      if (tokenizer.ttype == '>')
+      	consume('>');
       type = new Type("sequence<" + baseType.getName() + ">", Type.Kind.SEQUENCE, baseType);
+    } else if (name.equals("Promise") && tokenizer.ttype == '<') {
+    	if (tokenizer.ttype == '<')
+    		consume('<');
+      Type baseType = parseType();
+      if (tokenizer.ttype == '>')
+      	consume('>');
+      type = new Type("Promise<" + baseType.getName() + ">", Type.Kind.PROMISE, baseType);
     } else {
       type = lib.getType(name);
       if (type == null) {
@@ -333,6 +356,10 @@ public class IdlParser {
     } 
     consume('{');
     do {
+		if (tokenizer.sval.equals("readonly"))
+			tokenizer.nextToken();
+		if (tokenizer.sval.equals("attribute"))
+			consume(Tokenizer.TT_WORD, "attribute");
       Type fieldType = parseType();
       String fieldName = consumeIdentifier();
       String value = null;
@@ -352,6 +379,7 @@ public class IdlParser {
       consume(';');
     } while (tokenizer.ttype != '}');
     consume('}');
+    if (tokenizer.ttype != Tokenizer.TT_EOF)
     consume(';');
   }
 
@@ -365,10 +393,23 @@ public class IdlParser {
         break;
       }
       type.addEnumLiteral(tokenizer.sval);
-      consume('"');
+      // save old value for following code
+      String _sval = tokenizer.sval;
+      if (tokenizer.ttype == '"')
+    	  consume('"');
+      else
+    	  tokenizer.nextToken();
+      // some enum attributes like xx-x
+      if (tokenizer.ttype == '-'){
+    	  consume('-');
+    	  type.delEnumLiteral(_sval);
+    	  type.addEnumLiteral(_sval + '-' + tokenizer.sval);
+    	  tokenizer.nextToken();
+      }
     } while(tokenizer.ttype == ',');
     consume('}');
-    consume(';');
+    if (tokenizer.ttype == ';')
+    	consume(';');
   }
   
   private Type parseException() {
@@ -408,21 +449,27 @@ public class IdlParser {
       do {
         tokenizer.nextToken();
         String option = consumeIdentifier();
-        if ("NoInterfaceObject".equals(option)) {
+        if ("NoInterfaceObject".equals(option) || "NoObject".equals(option)) {
           if (kind != Type.Kind.GLOBAL) {
             kind = Type.Kind.NO_OBJECT;
           }
-        } else if ("Global".equals(option)) {
+        } else if ("PrimaryGlobal".equals(option) || "Global".equals(option)) {
           kind = Type.Kind.GLOBAL;
-        } else if ("Callback".equals(option)) {
-          consume('=');
-          consumeIdentifier();
+        } else if ("Callback".equals(option) || "Exposed".equals(option)) {
+        	if (tokenizer.ttype == Tokenizer.TT_COMMA)
+        		consume(',');
+        	else
+        		consume('=');
+        	consumeIdentifier();
         } else if ("ArrayClass".equals(option) || 
             "TreatNonCallableAsNull".equals(option) ||
             "OverrideBuiltins".equals(option) ||
             "Unforgeable".equals(option) ||
+            "Worker".equals(option) ||
             "Supplemental".equals(option)) {
-        } else if ("Constructor".equals(option) || "NamedConstructor".equals(option)) {
+        } else if ("Constructor".equals(option) || 
+        		"MapClass".equals(option) || 
+        		"NamedConstructor".equals(option)) {
           String name = "";
           if (option.equals("NamedConstructor")) {
             consume('=');
@@ -486,6 +533,8 @@ public class IdlParser {
   }
 
   private void parseParameterList(Operation op) {
+	if (tokenizer.ttype != '(')
+		return;
     consume('(');
     while(tokenizer.ttype != ')') {
       parseOptions();
@@ -550,7 +599,12 @@ public class IdlParser {
     if (oldType != newType) {
       newType.setSuperType(oldType);
     }
-    consume(';');
+    if (tokenizer.ttype == '[')
+    	consume('[');
+    if (tokenizer.ttype == ']')
+    	consume(']');
+    if (tokenizer.ttype == ';')
+    	consume(';');
   }
 
   private void parseValueType() {

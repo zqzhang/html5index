@@ -2,6 +2,7 @@ package org.html5index.model;
 
 import java.util.ArrayList;
 import java.util.Collection;
+import java.util.Iterator;
 import java.util.List;
 import java.util.TreeMap;
 import java.util.TreeSet;
@@ -10,13 +11,13 @@ public class Type extends Artifact {
   
   public enum Kind {
     ARRAY_OBJECT, INTERFACE, GLOBAL, NO_OBJECT, PRIMITIVE, EXCEPTION, DICTIONARY, ALIAS, UNION, 
-    ENUM, SEQUENCE, ARRAY, NULLABLE, PARTIAL, CALLBACK_FUNCTION, CALLBACK_INTERFACE
+    ENUM, SEQUENCE, ARRAY, NULLABLE, PARTIAL, CALLBACK_FUNCTION, CALLBACK_INTERFACE, PROPERTY, PROMISE
   }
   
   private Kind kind = Kind.NO_OBJECT;
   // TODO: null the objects and create on demand only?
-  private TreeMap<String,Property> properties = new TreeMap<String,Property>();
-  private TreeMap<String,Operation> operations = new TreeMap<String,Operation>();
+  private TreeMap<String, Property> properties = new TreeMap<String, Property>();
+  private TreeMap<String, Operation> operations = new TreeMap<String, Operation>();
   private TreeSet<Member> referencedBy = new TreeSet<Member>();
   private List<Operation> constructors = new ArrayList<Operation>();
   Library owner;
@@ -37,6 +38,17 @@ public class Type extends Artifact {
 
   public void addEnumLiteral(String value) {
     enumLiterals.add(value);
+  }
+  
+  public void delEnumLiteral(String value) {
+	  if (null == value || "".equals(value))
+		  return;
+	  Iterator<String> iter = enumLiterals.iterator();
+	  while(iter.hasNext()) {
+		  if (value.equals(iter.next())){
+			  iter.remove();
+		  }
+	  }
   }
   
   public Collection<String> getEnumLiterals() {
@@ -96,6 +108,15 @@ public class Type extends Artifact {
     }
     return set;
   }
+  
+  public Collection<Property> getOwnAndCssProperties() {
+    List<Property> list = new ArrayList<Property>();
+    list.addAll(properties.values());
+    for (Type t: types) {
+      list.addAll(t.getOwnAndCssProperties());
+    }
+    return list;
+  }
 
   
   public List<Type> getImplementedBy() {
@@ -108,6 +129,15 @@ public class Type extends Artifact {
   
   public void addProperty(Property property) {
     properties.put(property.getName(), property);
+    if (kind == Kind.PARTIAL) {
+      superType.addProperty(property);
+    } else {
+      property.owner = this;
+    }
+  }
+  
+  public void addPropertyInOrder(Property property) {
+    properties.put(property.getNo(), property);
     if (kind == Kind.PARTIAL) {
       superType.addProperty(property);
     } else {

@@ -3,6 +3,7 @@ package org.html5index.model;
 import org.html5index.util.HtmlWriter;
 
 public abstract class Artifact implements Comparable<Artifact> {
+  public static final int CSS = 64;
   public static final int CONSTANT = 1;
   public static final int CONSTRUCTOR = 2;
   public static final int OPTIONAL = 4;
