@@ -187,6 +187,12 @@ public class CrosswalkCSSSpecScan extends AbstractSpecScan {
 			Element element = (Element) list.item(i);
 			String id = element.getAttribute("id");
 			if (id != null && !"".equals(id)) {
+				/*
+				while (element.getNodeName().equals("dfn")
+						|| element.getNodeName().equals("code")) {
+					element = (Element) element.getParentNode();
+				}*/
+				//String name = element.getNodeName();
 				String text = element.getTextContent();
 				definitions.put(id,	new String[] { url, HtmlWriter.summary(text) });
 			}
@@ -250,6 +256,7 @@ public class CrosswalkCSSSpecScan extends AbstractSpecScan {
 					// find <h> element, not <p>.
 					while (preEl.getNodeName().startsWith("p"))
 						preEl = getPreviousSiblingElement(preEl);
+					//Node preNode = table.getPreviousSibling();
 					
 					NodeList nodeList = preEl == null ? null : preEl.getElementsByTagName("a");
 					// prevent null value.
@@ -294,6 +301,7 @@ public class CrosswalkCSSSpecScan extends AbstractSpecScan {
 						if ("CSS Fonts Module Level 3".equals(_title.getTextContent()) && "descdef".equals(klass))
 							value = value + "(@font-face)";
 						properties.add(key + "===" + value);
+						//System.out.print(tr.getFirstChild().getTextContent().trim());
 						
 					}
 					
